@@ -1,7 +1,8 @@
 name: Android checks
 on:
   push:
-    branches: [main]
+    # test/** branches build an installable debug APK for on-car testing (same as DiAuto).
+    branches: [main, 'test/**']
   pull_request:
   workflow_dispatch:
 permissions:
@@ -36,3 +37,10 @@ jobs:
             samples/home/build/reports/tests/
             samples/home/build/reports/lint-results-debug.html
             samples/maphost/build/reports/lint-results-debug.html
+      - name: Upload debug APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diplay-debug-apk
+          path: mobile/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
