@@ -47,6 +47,20 @@ class AppDialogsTest {
         assertDialogColors(lightOwner.appDialogContext(), DiPlayPalette.LIGHT)
     }
 
+    @Test fun dialogsFillTheirWindowInCodeSoTheThemeCannotLeaveThemTransparent() {
+        AirPlayPersistence.saveAppAppearance(context, AppAppearance.DARK)
+        assertEquals(DiPlayPalette.DARK.surface, windowColor(context.appDialogBuilder().create()))
+        assertEquals(DiPlayPalette.DARK.surface, windowColor(context.appDialog()))
+
+        AirPlayPersistence.saveAppAppearance(context, AppAppearance.LIGHT)
+        assertEquals(DiPlayPalette.LIGHT.surface, windowColor(context.appDialogBuilder().create()))
+        assertEquals(DiPlayPalette.LIGHT.surface, windowColor(context.appDialog()))
+        assertEquals(DiPlayPalette.DARK.surface, windowColor(context.appDialogBuilder(night = true).create()))
+    }
+
+    private fun windowColor(dialog: android.app.Dialog): Int =
+        (dialog.window!!.decorView.background as ColorDrawable).color
+
     private fun assertDialogColors(themedContext: android.content.Context, palette: DiPlayPalette) {
         val attributes = themedContext.theme.obtainStyledAttributes(
             intArrayOf(android.R.attr.colorAccent, android.R.attr.windowBackground),
