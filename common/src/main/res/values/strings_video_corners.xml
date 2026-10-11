@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="settings_rounded_video_corners">Rounded video corners</string>
-    <string name="settings_rounded_video_corners_hint">Rounds the corners of the CarPlay picture, as the original CarPlay does. The corners stay black. Applies when you return to CarPlay. Not used with Direct video output.</string>
+    <string name="settings_rounded_video_corners_hint">Rounds the corners of the CarPlay picture, as the original CarPlay does. The corners stay black. Applies when you return to CarPlay. Not used with Direct video output or with “Square corners, no safe area”.</string>
 </resources>

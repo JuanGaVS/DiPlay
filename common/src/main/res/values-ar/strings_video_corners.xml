@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="settings_rounded_video_corners">زوايا فيديو مستديرة</string>
-    <string name="settings_rounded_video_corners_hint">تدوير زوايا صورة CarPlay كما يفعل CarPlay الأصلي. تبقى الزوايا سوداء. يُطبَّق عند العودة إلى CarPlay. لا يُستخدم مع إخراج الفيديو المباشر.</string>
+    <string name="settings_rounded_video_corners_hint">تدوير زوايا صورة CarPlay كما يفعل CarPlay الأصلي. تبقى الزوايا سوداء. يُطبَّق عند العودة إلى CarPlay. لا يُستخدم مع إخراج الفيديو المباشر ولا مع «Square corners, no safe area».</string>
 </resources>

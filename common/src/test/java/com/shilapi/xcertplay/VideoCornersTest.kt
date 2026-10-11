@@ -30,6 +30,15 @@ class VideoCornersTest {
         assertFalse(AirPlayPersistence.loadRoundedVideoCorners(context))
     }
 
+    @Test fun squareCornersWithoutSafeAreaTurnsTheClipOff() {
+        AirPlayPersistence.saveRoundedVideoCorners(context, true)
+        assertTrue(VideoCorners.enabled(context))
+        AirPlayPersistence.saveMainDisplayDisableSafeArea(context, true)
+        assertFalse(VideoCorners.enabled(context))
+        AirPlayPersistence.saveMainDisplayDisableSafeArea(context, false)
+        assertTrue(VideoCorners.enabled(context))
+    }
+
     @Test fun radiusFollowsTheShorterSide() {
         assertEquals(720 * VideoCorners.RADIUS_FRACTION, VideoCorners.radiusPx(1280, 720), 0.001f)
         assertEquals(720 * VideoCorners.RADIUS_FRACTION, VideoCorners.radiusPx(720, 1280), 0.001f)

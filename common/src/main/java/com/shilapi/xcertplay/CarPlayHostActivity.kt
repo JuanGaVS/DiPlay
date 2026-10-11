@@ -941,7 +941,7 @@ class CarPlayHostActivity : ComponentActivity() {
         WheelKeyService.restoreIfNeeded(this)
         hostAppearanceResumed = true
         updateCallPopupGuard()
-        roundedCornersView?.let { VideoCorners.setRounded(it, AirPlayPersistence.loadRoundedVideoCorners(this)) }
+        roundedCornersView?.let { VideoCorners.setRounded(it, VideoCorners.enabled(this)) }
         val savedNightMode = AirPlayPersistence.loadCarPlayNightMode(this)
         val savedThreshold = AirPlayPersistence.loadAmbientLightThreshold(this)
         val savedDelay = AirPlayPersistence.loadAmbientDelaySeconds(this)
@@ -1590,7 +1590,7 @@ class CarPlayHostActivity : ComponentActivity() {
         val video = TextureView(this).apply {
             isOpaque = false
             surfaceTextureListener = textureListener
-            VideoCorners.setRounded(this, AirPlayPersistence.loadRoundedVideoCorners(this@CarPlayHostActivity))
+            VideoCorners.setRounded(this, VideoCorners.enabled(this@CarPlayHostActivity))
         }
         roundedCornersView = video
         pictureBinding = CarPlayPicture.Binding(video)
