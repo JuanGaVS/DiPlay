@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Surface of DiPlay's dialogs. The themes and AppDialogs.kt both read these, so they cannot drift apart. -->
+    <color name="dialog_surface_dark">#151E2C</color>
+    <color name="dialog_surface_light">#F8FAFD</color>
+</resources>
