@@ -1754,6 +1754,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             toggle(card, getString(R.string.adapt_pip_resolution), getString(R.string.adapt_pip_resolution_description), AirPlayPersistence.loadAdaptPipResolution(this)) {
                 AirPlayPersistence.saveAdaptPipResolution(this, it)
             }
+            toggle(card, getString(R.string.settings_rounded_video_corners), getString(R.string.settings_rounded_video_corners_hint),
+                AirPlayPersistence.loadRoundedVideoCorners(this)) {
+                AirPlayPersistence.saveRoundedVideoCorners(this, it)
+            }
             card.addView(button("${getString(R.string.settings_interface_size)} · ${InterfaceSize.displayName(this, InterfaceSize.preference(this))}", false) {
                 InterfaceSize.showPicker(this)
             }, matchButton(12, 60))
