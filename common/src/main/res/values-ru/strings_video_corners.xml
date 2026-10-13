@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_rounded_video_corners">Скруглённые углы видео</string>
+    <string name="settings_rounded_video_corners_hint">Скругляет углы изображения CarPlay, как в оригинальном CarPlay. Углы остаются чёрными. Применяется при возврате в CarPlay. Не используется с прямым выводом видео и с «Square corners, no safe area».</string>
+</resources>
