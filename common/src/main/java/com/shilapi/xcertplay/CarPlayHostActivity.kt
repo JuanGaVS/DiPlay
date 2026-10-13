@@ -5399,10 +5399,13 @@ class CarPlayHostActivity : ComponentActivity() {
                 }
             }
         } else {
-            (view as? TextureView)?.setTransform(Matrix().apply {
-                setScale(content.width / viewWidth, content.height / viewHeight)
-                postTranslate(content.left, content.top)
-            })
+            (view as? TextureView)?.let {
+                it.setTransform(Matrix().apply {
+                    setScale(content.width / viewWidth, content.height / viewHeight)
+                    postTranslate(content.left, content.top)
+                })
+                VideoCorners.setPictureBounds(it, content.left, content.top, content.width, content.height)
+            }
         }
         if (sidePanelShown) placeSidePanel(viewWidth, viewHeight)
         placeSidePanelTab(viewWidth, viewHeight)

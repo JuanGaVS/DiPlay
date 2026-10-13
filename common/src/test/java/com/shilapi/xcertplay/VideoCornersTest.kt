@@ -1,6 +1,8 @@
 package com.shilapi.xcertplay
 
 import android.content.Context
+import android.graphics.Outline
+import android.graphics.Rect
 import android.view.View
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -44,6 +46,30 @@ class VideoCornersTest {
         assertEquals(720 * VideoCorners.RADIUS_FRACTION, VideoCorners.radiusPx(720, 1280), 0.001f)
         assertEquals(0f, VideoCorners.radiusPx(0, 720), 0f)
         assertEquals(0f, VideoCorners.radiusPx(1280, -1), 0f)
+    }
+
+    @Test fun theClipFollowsALetterboxedPicture() {
+        // A 1920x990 canvas in a 1920x942 window leaves side bars; the corners belong to the picture.
+        assertEquals(Rect(47, 0, 1873, 942), VideoCorners.clipBounds(1920, 942, Rect(47, 0, 1873, 942)))
+        assertEquals(Rect(0, 0, 1280, 720), VideoCorners.clipBounds(1280, 720, null))
+    }
+
+    @Test fun aPictureLargerThanTheViewIsClippedAtTheViewEdges() {
+        assertEquals(Rect(0, 0, 1280, 720), VideoCorners.clipBounds(1280, 720, Rect(-100, -50, 1400, 800)))
+        assertEquals(Rect(0, 0, 1280, 720), VideoCorners.clipBounds(1280, 720, Rect(2000, 0, 2100, 720)))
+    }
+
+    @Test fun pictureBoundsReachTheOutline() {
+        val view = View(context)
+        view.layout(0, 0, 1920, 942)
+        VideoCorners.setRounded(view, true)
+        VideoCorners.setPictureBounds(view, 47.3f, 0f, 1825.4f, 942f)
+        val outline = Outline()
+        view.outlineProvider.getOutline(view, outline)
+        val bounds = Rect()
+        assertTrue(outline.getRect(bounds))
+        assertEquals(Rect(47, 0, 1873, 942), bounds)
+        assertEquals(VideoCorners.radiusPx(1826, 942), outline.radius, 0.001f)
     }
 
     @Test fun togglingTheClipTurnsViewClippingOnAndOff() {
