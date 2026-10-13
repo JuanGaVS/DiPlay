@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="settings_rounded_video_corners">Esquinas redondeadas del video</string>
-    <string name="settings_rounded_video_corners_hint">Redondea las esquinas de la imagen de CarPlay, como hace el CarPlay original. Las esquinas quedan en negro. Se aplica al volver a CarPlay. No se usa con la salida directa de video ni con «Square corners, no safe area».</string>
+    <string name="settings_rounded_video_corners_hint">Redondea las esquinas de la imagen de CarPlay, como hace el CarPlay original. Las esquinas quedan en negro. Se aplica al volver a CarPlay. No se usa con la salida de vídeo directa ni con «Esquinas rectas, sin zona segura».</string>
 </resources>

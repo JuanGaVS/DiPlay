@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_rounded_video_corners">映像の角を丸くする</string>
+    <string name="settings_rounded_video_corners_hint">純正の CarPlay と同じように、CarPlay の映像の角を丸くします。角は黒く表示されます。CarPlay に戻ると適用されます。映像の直接出力や「角を直角にしてセーフエリアを無効化」とは併用されません。</string>
+</resources>

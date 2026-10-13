@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="settings_rounded_video_corners">Заокруглені кути відео</string>
-    <string name="settings_rounded_video_corners_hint">Заокруглює кути зображення CarPlay, як в оригінальному CarPlay. Кути залишаються чорними. Застосовується під час повернення до CarPlay. Не використовується з прямим виведенням відео та з «Square corners, no safe area».</string>
+    <string name="settings_rounded_video_corners_hint">Заокруглює кути зображення CarPlay, як в оригінальному CarPlay. Кути залишаються чорними. Застосовується під час повернення до CarPlay. Не використовується з прямим виводом відео та з «Прямі кути без безпечної області».</string>
 </resources>
