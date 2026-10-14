@@ -47,4 +47,14 @@ class ThemeModeDiagnosticsTest {
         assertNotNull(diagnostics.observe(ThemeModeDiagnostics.Source.SESSION_ACTIVE, mode, false, true, 2))
         assertNotNull(diagnostics.observe(ThemeModeDiagnostics.Source.STOP, mode, false, true, 3))
     }
+
+    @Test fun aChangeInAnotherSourceIsLoggedEvenWhenTheActivityConfigurationIsStale() {
+        val diagnostics = ThemeModeDiagnostics()
+        val light = Configuration.UI_MODE_NIGHT_NO
+        diagnostics.observe(ThemeModeDiagnostics.Source.CREATE, light, false, true, 0, "systemUiMode=0x11")
+        assertNull(diagnostics.observe(ThemeModeDiagnostics.Source.POLL, light, false, true, 2_000, "systemUiMode=0x11"))
+        val sample = diagnostics.observe(ThemeModeDiagnostics.Source.POLL, light, false, true, 4_000, "systemUiMode=0x21")!!
+        assertTrue(sample.contains("reported=light applied=light"))
+        assertTrue(sample.endsWith("systemUiMode=0x21"))
+    }
 }
