@@ -97,6 +97,7 @@ import com.shilapi.xcertplay.media.CarPlayTouchMapper
 import com.shilapi.xcertplay.media.CarPlayVideoLayout
 import com.shilapi.xcertplay.network.CarPlayVpnService
 import com.shilapi.xcertplay.orchestration.CarPlayController
+import com.shilapi.xcertplay.orchestration.RestartCooldown
 import com.shilapi.xcertplay.orchestration.CarPlayRuntimeConfig
 import com.shilapi.xcertplay.network.WirelessStartupFailure
 import com.shilapi.xcertplay.network.WirelessStartupPolicy
@@ -604,6 +605,8 @@ class CarPlayHostActivity : ComponentActivity() {
     private var handshakeResetInProgress = false
     private var startAfterHandshakeReset = false
     private var restartGeneration = 0
+    /** Elapsed-realtime when the current AirPlay session became active; null while none is. */
+    private var sessionActiveSinceMillis: Long? = null
     private var reconnectScheduled = false
     // How often the current controller reached its control loop, and whether a loss came after the
     // last time. A retry scheduled before the count went up leaves the attempt alone only while it is
@@ -5254,6 +5257,7 @@ class CarPlayHostActivity : ComponentActivity() {
                     if (pending?.first === session) {
                         installIphoneCornerMask(session, pending.second.first, pending.second.second)
                     } else clearIphoneCornerMask()
+                    sessionActiveSinceMillis = SystemClock.elapsedRealtime()
                     CarPlayBackgroundSession.active = true
                     showConnectionHelp(null)
                     callPopupSessionReady = true
@@ -5985,6 +5989,11 @@ class CarPlayHostActivity : ComponentActivity() {
         ClusterActivityOutput.setStreamActive(false)
         setConnectionStage(reason)
         Log.i(TAG, "$reason; rebuilding stack at ${size.width}x${size.height}")
+        val sessionAgeMillis = sessionActiveSinceMillis?.let { SystemClock.elapsedRealtime() - it }
+        sessionActiveSinceMillis = null
+        // The pause is for the Wi-Fi Direct hand-over; a wired restart (0.2.20 made it start within
+        // seconds) must not wait.
+        val cooldownMillis = if (wirelessEnabled) RestartCooldown.delayMillis(sessionAgeMillis) else 0L
         val generation = ++restartGeneration
         handshakeResetInProgress = true
         callPopupSessionReady = false
@@ -6008,15 +6017,27 @@ class CarPlayHostActivity : ComponentActivity() {
                 diagnosticLog,
                 "${CarPlayController.CONNECTION_DIAGNOSTIC_PREFIX} generation=$generation " +
                     "restart teardownWaitCompleted=$completed " +
-                    "elapsedMs=${((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(0)}",
+                    "elapsedMs=${((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(0)} " +
+                    "sessionAgeMs=${sessionAgeMillis ?: "none"} cooldownMs=$cooldownMillis",
             )
             oldSink?.let(::closeRetiringSink)
             runOnUiThread {
                 if (!shuttingDown.get() && generation == restartGeneration) {
-                    handshakeResetInProgress = false
-                    // The display can rotate again while the old stack is closing. Use the
-                    // latest accepted size, and wait for any pending resize to settle first.
-                    maybeStartCarPlay()
+                    val startAgain = {
+                        if (!shuttingDown.get() && generation == restartGeneration) {
+                            handshakeResetInProgress = false
+                            // The display can rotate again while the old stack is closing. Use the
+                            // latest accepted size, and wait for any pending resize to settle first.
+                            maybeStartCarPlay()
+                        }
+                    }
+                    if (cooldownMillis > 0L) {
+                        // handshakeResetInProgress stays set, so nothing else restarts meanwhile.
+                        appendLog("Short session; waiting ${cooldownMillis / 1000} s before reconnecting")
+                        mainHandler.postDelayed(startAgain, cooldownMillis)
+                    } else {
+                        startAgain()
+                    }
                 }
             }
         }

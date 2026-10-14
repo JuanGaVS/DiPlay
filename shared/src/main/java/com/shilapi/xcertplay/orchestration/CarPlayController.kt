@@ -1270,6 +1270,10 @@ class CarPlayController(
                 },
                 onTimeout = {
                     if (!closed && generation == wirelessGeneration.get()) {
+                        // The group-client count is unreliable on Android 9; the neighbour table
+                        // says whether the iPhone ever reached the Wi-Fi Direct interface.
+                        debugLog("wireless startup generation=$generation first TCP timeout neighbours " +
+                            P2pNeighborProbe.read())
                         flipWirelessAddressFamily(generation)
                         fail(WirelessStartupException(WirelessStartupFailure.FIRST_TCP_TIMEOUT,
                             "No AirPlay TCP after CarPlay StartSession"), generation)
