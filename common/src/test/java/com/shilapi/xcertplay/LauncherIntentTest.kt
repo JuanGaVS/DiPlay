@@ -96,7 +96,7 @@ class LauncherIntentTest {
         val boot = Intent().putExtra(BootReceiver.EXTRA_AUTO_START, true)
         assertTrue(DiPlayActivity.isAutomaticLaunch(wake))
         assertTrue(DiPlayActivity.isAutomaticLaunch(boot))
-        assertFalse(DiPlayActivity.isAutomaticLaunch(boot.putExtra("page", "settings")))
+        assertFalse(DiPlayActivity.isAutomaticLaunch(Intent(boot).putExtra("page", "settings")))
         assertFalse(DiPlayActivity.isAutomaticLaunch(Intent()))
         for (automatic in listOf(wake, boot)) {
             ReflectionHelpers.callInstanceMethod<Unit>(activity, "onNewIntent",
