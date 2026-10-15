@@ -430,7 +430,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         connectionSettingsReturnCategory = null
         // CarPlay runs in its own task, so the launcher icon resumes this one. Settings opened from
         // CarPlay carry a "page" extra, which isLauncherIntent rejects.
-        if (isLauncherIntent(intent) && CarPlayBackgroundSession.hasSession()) {
+        // The car's boot and the iPhone's Bluetooth wake relaunch this activity with NEW_TASK while CarPlay is
+        // already starting. Without this, Home would stay on top of the projection until the driver left it.
+        if ((isLauncherIntent(intent) || isAutomaticLaunch(intent)) && CarPlayBackgroundSession.hasSession()) {
+            intent.removeExtra(PhoneBluetoothReceiver.EXTRA_AUTO_CONNECT)
+            intent.removeExtra(BootReceiver.EXTRA_AUTO_START)
             page = "home"; render(); openProjection(); return
         }
         page = intent.getStringExtra("page") ?: "home"; render()
@@ -6742,6 +6746,12 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             return language == "zh" && text.isNotBlank() &&
                 text.none { it in 'A'..'Z' || it in 'a'..'z' }
         }
+
+        /** Relaunch by the boot receiver or the iPhone's Bluetooth wake, not by the driver. */
+        internal fun isAutomaticLaunch(intent: Intent): Boolean =
+            !intent.hasExtra("page") &&
+                (intent.getBooleanExtra(PhoneBluetoothReceiver.EXTRA_AUTO_CONNECT, false) ||
+                    intent.getBooleanExtra(BootReceiver.EXTRA_AUTO_START, false))
 
         internal fun isLauncherIntent(intent: Intent): Boolean =
             intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_LAUNCHER) &&

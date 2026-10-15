@@ -17,6 +17,7 @@ class BootReceiver : BroadcastReceiver() {
         if (!launchEnabled) return
 
         val launch = Intent(context, DiPlayActivity::class.java).apply {
+            putExtra(EXTRA_AUTO_START, true)
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -32,7 +33,8 @@ class BootReceiver : BroadcastReceiver() {
         }
     }
 
-    private companion object {
-        const val TAG = "xcertplay-boot"
+    internal companion object {
+        private const val TAG = "xcertplay-boot"
+        const val EXTRA_AUTO_START = "com.shihab.diplay.AUTO_START_AFTER_BOOT"
     }
 }
