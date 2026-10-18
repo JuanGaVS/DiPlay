@@ -29,4 +29,12 @@ class RestartCooldownTest {
     fun noPauseWhenTheClockWentBackwards() {
         assertEquals(0L, RestartCooldown.delayMillis(-5L))
     }
+
+    @Test
+    fun pausesOnlyWhenAWifiDirectConnectionWasLost() {
+        assertEquals(RestartCooldown.COOLDOWN_MILLIS, RestartCooldown.delayMillis(30_000L, true, true))
+        assertEquals(0L, RestartCooldown.delayMillis(30_000L, false, true))
+        assertEquals(0L, RestartCooldown.delayMillis(30_000L, true, false))
+        assertEquals(0L, RestartCooldown.delayMillis(null, true, true))
+    }
 }

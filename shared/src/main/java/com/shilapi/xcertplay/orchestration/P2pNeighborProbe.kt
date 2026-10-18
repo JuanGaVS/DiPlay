@@ -14,12 +14,13 @@ object P2pNeighborProbe {
     }
 
     private const val FLAG_COMPLETE = 0x2
+    private val WHITESPACE = Regex("\\s+")
 
     fun parse(arpTable: String): Summary {
         var entries = 0
         var complete = 0
         arpTable.lineSequence().drop(1).forEach { line ->
-            val columns = line.trim().split(Regex("\\s+"))
+            val columns = line.trim().split(WHITESPACE)
             // IP address, HW type, Flags, HW address, Mask, Device
             if (columns.size < 6 || !columns[5].startsWith("p2p")) return@forEach
             entries += 1
