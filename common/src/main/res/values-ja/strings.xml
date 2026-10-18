@@ -734,6 +734,7 @@
     <string name="carplay_calls_on_dashboard">CarPlayの通話をメーターに表示</string>
     <string name="settings_built_in_car_hotspot_recommended">車載ホットスポット（推奨）</string>
     <string name="settings_wifi_direct_auto_band">自動 · %1$s</string>
+    <string name="settings_wifi_direct_auto_fallback">自動（障害のため 2.4 GHz）</string>
     <string name="settings_wifi_direct_band_note">「自動 · 5 GHz」と「自動 · 2.4 GHz」では、Wi-Fi Directの周波数帯を固定し、車載端末がチャンネルを選びます。車載端末がその周波数帯に対応していない場合は、別の帯域へ切り替えず、メッセージを表示して接続を停止します。</string>
     <string name="carplay_calls_on_dashboard_description">CarPlayの着信中と通話中、BYD純正のCarPlayアプリと同様に発信者をメーターへ、通話時間をメーターとHUDへ表示します。通話中は車の送風量も下がります。変更はすぐに反映されます。車載端末のネットワークADBが必要です。</string>
     <string name="cluster_safe_area_edit">メーターのセーフエリア · 範囲を編集</string>

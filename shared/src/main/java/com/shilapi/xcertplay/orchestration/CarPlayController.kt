@@ -1725,9 +1725,7 @@ class CarPlayController(
                     it.sessionActive()
                     it.close()
                 }
-                if (config.wirelessHotspotMode == WirelessHotspotMode.WIFI_P2P) {
-                    bandFallback.onSessionConfirmed(config.wifiP2pPreferredChannel, wirelessP2pFrequencyMHz)
-                }
+                bandFallback.onSessionConfirmed()
                 wirelessConnectionProof.activate(generation, session)
                 // Keep wirelessActiveReported false until maybeCompleteWirelessHandoff() closes
                 // the Bluetooth bootstrap after the tunneled iAP2 channel is ready.
@@ -2450,9 +2448,10 @@ class CarPlayController(
         }
         val manager: WirelessHotspotManager = when (hotspotMode) {
             WirelessHotspotMode.WIFI_P2P -> {
-                val channel = bandFallback.channelFor(config.wifiP2pPreferredChannel)
+                val channel = bandFallback.channelFor(config.wifiP2pPreferredChannel,
+                    P2pBandFallback.currentNetworkKey(appContext))
                 if (channel != config.wifiP2pPreferredChannel) {
-                    debugLog("Wi-Fi P2P band fallback active: Auto uses 2.4 GHz after repeated 5 GHz first-connection timeouts")
+                    debugLog("Wi-Fi P2P band fallback active: Auto uses 2.4 GHz after repeated 5 GHz first-connection timeouts (for up to 7 days)")
                 }
                 WifiP2pGroupManager(appContext, ::debugLog, preferredChannel = channel)
             }
@@ -2824,10 +2823,11 @@ class CarPlayController(
     private fun recordFirstTcpTimeoutForBand() {
         if (config.wirelessHotspotMode != WirelessHotspotMode.WIFI_P2P) return
         val frequency = wirelessP2pFrequencyMHz
-        val outcome = bandFallback.onFirstTcpTimeout(config.wifiP2pPreferredChannel, frequency)
+        val outcome = bandFallback.onFirstTcpTimeout(config.wifiP2pPreferredChannel, frequency,
+            P2pBandFallback.currentNetworkKey(appContext))
         if (outcome != P2pBandFallback.Outcome.UNCHANGED) {
             debugLog("Wi-Fi P2P band fallback outcome=$outcome groupFrequencyMHz=${frequency ?: "unknown"} " +
-                "timeoutsBeforeFallback=${P2pBandFallback.TIMEOUTS_BEFORE_FALLBACK}")
+                "timeoutsBeforeChange=${P2pBandFallback.TIMEOUTS_BEFORE_CHANGE}")
         }
     }
 
