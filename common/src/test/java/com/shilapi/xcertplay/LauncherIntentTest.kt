@@ -116,6 +116,7 @@ class LauncherIntentTest {
                 shadowOf(activity).nextStartedActivity?.component?.className)
             assertEquals(0, stops)
             controller!!.destroy()
+            controller = null
         }
     }
 }
