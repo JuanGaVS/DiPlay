@@ -1872,7 +1872,7 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        pendingRestartStart?.let(mainHandler::removeCallbacks); pendingRestartStart = null
+        pendingRestartStart?.let { mainHandler.removeCallbacks(it) }; pendingRestartStart = null
         mainHandler.removeCallbacks(hideTemporarySystemBars)
         discardLastPicture()
         if (pictureCopyThreadStarted) pictureCopyThread.quitSafely()
