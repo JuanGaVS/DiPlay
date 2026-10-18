@@ -97,6 +97,7 @@ import com.shilapi.xcertplay.media.CarPlayTouchMapper
 import com.shilapi.xcertplay.media.CarPlayVideoLayout
 import com.shilapi.xcertplay.network.CarPlayVpnService
 import com.shilapi.xcertplay.orchestration.CarPlayController
+import com.shilapi.xcertplay.orchestration.RestartCooldown
 import com.shilapi.xcertplay.orchestration.CarPlayRuntimeConfig
 import com.shilapi.xcertplay.network.WirelessStartupFailure
 import com.shilapi.xcertplay.network.WirelessStartupPolicy
@@ -604,6 +605,10 @@ class CarPlayHostActivity : ComponentActivity() {
     private var handshakeResetInProgress = false
     private var startAfterHandshakeReset = false
     private var restartGeneration = 0
+    /** Elapsed-realtime when the current AirPlay session became active; null while none is. */
+    private var sessionActiveSinceMillis: Long? = null
+    /** The rebuild that waits out the Wi-Fi Direct pause after a short session; null when none waits. */
+    private var pendingRestartStart: Runnable? = null
     private var reconnectScheduled = false
     // How often the current controller reached its control loop, and whether a loss came after the
     // last time. A retry scheduled before the count went up leaves the attempt alone only while it is
@@ -1101,6 +1106,7 @@ class CarPlayHostActivity : ComponentActivity() {
                 AirPlayPersistence.saveWirelessEnabled(this, false)
                 wirelessEnabled = false
                 wirelessPermissionsReady = true
+                skipRestartPause()
                 if (controller != null) {
                     restartCarPlay("switching to USB")
                 }
@@ -1866,6 +1872,7 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        pendingRestartStart?.let { mainHandler.removeCallbacks(it) }; pendingRestartStart = null
         mainHandler.removeCallbacks(hideTemporarySystemBars)
         discardLastPicture()
         if (pictureCopyThreadStarted) pictureCopyThread.quitSafely()
@@ -1987,7 +1994,12 @@ class CarPlayHostActivity : ComponentActivity() {
             visibility = View.GONE
             setOnClickListener {
                 if (!CarPlayBackgroundSession.isOwner(this@CarPlayHostActivity) ||
-                    shuttingDown.get() || menuOpen || handshakeResetInProgress) return@setOnClickListener
+                    shuttingDown.get() || menuOpen) return@setOnClickListener
+                if (handshakeResetInProgress) {
+                    // Only a waiting pause may be cut short; a teardown in progress still blocks Retry.
+                    if (pendingRestartStart != null) { visibility = View.GONE; skipRestartPause() }
+                    return@setOnClickListener
+                }
                 startupRetryBudget.manualRetry()
                 startupRetryStopped = false
                 reconnectAttempts = 0
@@ -5254,6 +5266,7 @@ class CarPlayHostActivity : ComponentActivity() {
                     if (pending?.first === session) {
                         installIphoneCornerMask(session, pending.second.first, pending.second.second)
                     } else clearIphoneCornerMask()
+                    sessionActiveSinceMillis = SystemClock.elapsedRealtime()
                     CarPlayBackgroundSession.active = true
                     showConnectionHelp(null)
                     callPopupSessionReady = true
@@ -5967,14 +5980,14 @@ class CarPlayHostActivity : ComponentActivity() {
                     appendLog("Not reconnecting after $reason: the same attempt is running again")
                     return@postDelayed
                 }
-                restartCarPlay("Reconnecting after $reason")
+                restartCarPlay("Reconnecting after $reason", connectionLost = true)
             },
             delayMillis,
         )
     }
 
     /** Full-stack fallback when an AirPlay-only reconnect is unavailable. */
-    private fun restartCarPlay(reason: String) {
+    private fun restartCarPlay(reason: String, connectionLost: Boolean = false) {
         if (!CarPlayBackgroundSession.isOwner(this)) return
         if (shuttingDown.get() || menuOpen || handshakeResetInProgress) return
         val size = activeDisplaySize ?: return
@@ -5985,6 +5998,14 @@ class CarPlayHostActivity : ComponentActivity() {
         ClusterActivityOutput.setStreamActive(false)
         setConnectionStage(reason)
         Log.i(TAG, "$reason; rebuilding stack at ${size.width}x${size.height}")
+        val sessionAgeMillis = sessionActiveSinceMillis?.let { SystemClock.elapsedRealtime() - it }
+        sessionActiveSinceMillis = null
+        // The pause is for the Wi-Fi Direct hand-over after a lost connection. A wired restart (0.2.20
+        // made it start within seconds) and a planned one (settings, rotation, display, cluster map)
+        // must not wait.
+        val cooldownMillis = RestartCooldown.delayMillis(
+            sessionAgeMillis, connectionLost, wirelessEnabled && wirelessHotspotMode == WirelessHotspotMode.WIFI_P2P,
+        )
         val generation = ++restartGeneration
         handshakeResetInProgress = true
         callPopupSessionReady = false
@@ -6008,18 +6029,40 @@ class CarPlayHostActivity : ComponentActivity() {
                 diagnosticLog,
                 "${CarPlayController.CONNECTION_DIAGNOSTIC_PREFIX} generation=$generation " +
                     "restart teardownWaitCompleted=$completed " +
-                    "elapsedMs=${((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(0)}",
+                    "elapsedMs=${((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(0)} " +
+                    "sessionAgeMs=${sessionAgeMillis ?: "none"} cooldownMs=$cooldownMillis",
             )
             oldSink?.let(::closeRetiringSink)
             runOnUiThread {
                 if (!shuttingDown.get() && generation == restartGeneration) {
-                    handshakeResetInProgress = false
-                    // The display can rotate again while the old stack is closing. Use the
-                    // latest accepted size, and wait for any pending resize to settle first.
-                    maybeStartCarPlay()
+                    val startAgain = {
+                        pendingRestartStart = null
+                        if (!shuttingDown.get() && generation == restartGeneration) {
+                            handshakeResetInProgress = false
+                            // The display can rotate again while the old stack is closing. Use the
+                            // latest accepted size, and wait for any pending resize to settle first.
+                            maybeStartCarPlay()
+                        }
+                    }
+                    if (cooldownMillis > 0L) {
+                        // handshakeResetInProgress stays set, so nothing else restarts meanwhile.
+                        appendLog("Short session; waiting ${cooldownMillis / 1000} s before reconnecting")
+                        val pending = Runnable { startAgain() }
+                        pendingRestartStart = pending
+                        mainHandler.postDelayed(pending, cooldownMillis)
+                    } else {
+                        startAgain()
+                    }
                 }
             }
         }
+    }
+
+    /** Ends the pause before a rebuild at once, for a driver action such as Retry or switching to USB. */
+    private fun skipRestartPause() {
+        val pending = pendingRestartStart ?: return
+        mainHandler.removeCallbacks(pending)
+        pending.run()
     }
 
     private fun showDiPlayHome(page: String = "home") {
@@ -6176,7 +6219,10 @@ class CarPlayHostActivity : ComponentActivity() {
         } else if (handshakeResetInProgress) {
             startAfterHandshakeReset = true
         } else if ((reconnect || recoveryPending) && controller != null) {
-            restartCarPlay(if (reconnect) "Settings saved; reconnecting" else "Connection lost while settings were open; reconnecting")
+            restartCarPlay(
+                if (reconnect) "Settings saved; reconnecting" else "Connection lost while settings were open; reconnecting",
+                connectionLost = !reconnect,
+            )
         } else {
             maybeStartCarPlay()
         }
