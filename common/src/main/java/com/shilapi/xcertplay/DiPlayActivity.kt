@@ -373,7 +373,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Back on the home page finishes this activity while the session runs on, so the icon lands here.
-        if (savedInstanceState == null && isLauncherIntent(intent) && CarPlayBackgroundSession.hasSession()) {
+        // A boot or Bluetooth wake that starts this activity cold, while CarPlay already runs, does the same.
+        if (savedInstanceState == null && (isLauncherIntent(intent) || isAutomaticLaunch(intent)) &&
+            CarPlayBackgroundSession.hasSession()) {
+            intent.removeExtra(PhoneBluetoothReceiver.EXTRA_AUTO_CONNECT)
+            intent.removeExtra(BootReceiver.EXTRA_AUTO_START)
             openProjection(); finish(); return
         }
         scheduleBackgroundUpdateChecks()
