@@ -46,6 +46,7 @@ class P2pBandFallbackTest {
         assertEquals(P2pBandFallback.Outcome.COUNTED, timeout(5180))
         assertFalse(fallback.forced)
         // Also while forced: one good session wipes the release counter.
+        fallback.reset()
         force()
         timeout(2437)
         fallback.onSessionConfirmed()
