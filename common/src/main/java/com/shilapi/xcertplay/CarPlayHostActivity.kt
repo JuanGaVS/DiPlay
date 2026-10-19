@@ -5630,7 +5630,22 @@ class CarPlayHostActivity : ComponentActivity() {
     private fun logThemeState(source: ThemeModeDiagnostics.Source, configuration: Configuration) {
         themeDiagnostics.observe(
             source, configuration.uiMode, darkMode, activeAirPlaySession != null, SystemClock.elapsedRealtime(),
+            themeSources(),
         )?.let(::appendLog)
+    }
+
+    /**
+     * The same day/night setting as seen through the framework's own resources, the application context and
+     * UiModeManager. Only recorded: a head unit may update one of them while this activity's stays stale.
+     */
+    private fun themeSources(): String = try {
+        val system = Resources.getSystem().configuration.uiMode
+        val application = applicationContext.resources.configuration.uiMode
+        val manager = (getSystemService(Context.UI_MODE_SERVICE) as? android.app.UiModeManager)?.nightMode
+        "systemUiMode=0x${system.toString(16)} applicationUiMode=0x${application.toString(16)} " +
+            "uiModeManagerNight=${manager ?: "unavailable"}"
+    } catch (error: RuntimeException) {
+        "themeSources=unavailable failureClass=${error.javaClass.simpleName}"
     }
 
     private fun syncAirPlayDarkMode(source: ThemeModeDiagnostics.Source) {
