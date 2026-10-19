@@ -824,6 +824,7 @@ class CarPlayHostActivity : ComponentActivity() {
         getSystemService(android.hardware.display.DisplayManager::class.java)
             ?.registerDisplayListener(clusterDisplayListener, mainHandler)
         initializeSessionLog()
+        registerConnectionEventLog()
         lastConfiguration = Configuration(resources.configuration)
         darkMode = savedInstanceState?.getBoolean("carplay_night_active")
             ?: nightModeOrNull(resources.configuration.uiMode) ?: false
@@ -1917,6 +1918,7 @@ class CarPlayHostActivity : ComponentActivity() {
         fallbackVideoView = null
         fallbackVideoBounds = null
         sessionLog?.append("Activity destroyed")
+        unregisterConnectionEventLog()
         sessionLog?.close()
         sessionLog = null
         super.onDestroy()
@@ -6280,6 +6282,8 @@ class CarPlayHostActivity : ComponentActivity() {
         sessionDisplay = null
         discardLastPicture()
         Log.i(TAG, "shutdown reason=$reason terminateProcess=$terminateProcess")
+        val shutdownStartedMillis = SystemClock.elapsedRealtime()
+        appendLog("CONNECTION_EVENT shutdown requested reason=$reason terminateProcess=$terminateProcess")
         teardownExecutor.execute {
             oldController?.close()
             val clean = oldController?.awaitClosed(CONTROLLER_CLOSE_TIMEOUT_MILLIS) ?: true
@@ -6289,6 +6293,8 @@ class CarPlayHostActivity : ComponentActivity() {
                 applicationContext.stopService(Intent(applicationContext, CarPlayVpnService::class.java))
             }
             Log.i(TAG, "shutdown complete clean=$clean")
+            sessionLog?.append(formattedLogLine("CONNECTION_EVENT shutdown complete clean=$clean " +
+                "elapsedMs=${SystemClock.elapsedRealtime() - shutdownStartedMillis}", System.currentTimeMillis()))
             applicationContext.stopService(Intent(applicationContext, DiPlaySessionService::class.java))
             teardownExecutor.shutdown()
             mainHandler.post { completion() }
@@ -6657,6 +6663,26 @@ class CarPlayHostActivity : ComponentActivity() {
     private fun appendLog(message: String) {
         val safe = DiagnosticRedactor.redact(message) ?: return
         sessionLog?.append(formattedLogLine(safe, System.currentTimeMillis()))
+    }
+
+    private var connectionEventLog: ConnectionEventDiagnostics? = null
+
+    /** Records Bluetooth, Wi-Fi Direct, screen and power events, to show what the head unit saw at a disconnect. */
+    private fun registerConnectionEventLog() {
+        if (connectionEventLog != null) return
+        val receiver = ConnectionEventDiagnostics(::appendLog)
+        try {
+            registerReceiver(receiver, ConnectionEventDiagnostics.filter())
+            connectionEventLog = receiver
+        } catch (error: RuntimeException) {
+            Log.w(TAG, "Could not record connection events", error)
+        }
+    }
+
+    private fun unregisterConnectionEventLog() {
+        val receiver = connectionEventLog ?: return
+        connectionEventLog = null
+        try { unregisterReceiver(receiver) } catch (_: IllegalArgumentException) {}
     }
 
     private fun appendFileLog(message: String) {
