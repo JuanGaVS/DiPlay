@@ -6002,7 +6002,10 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     /** Full-stack fallback when an AirPlay-only reconnect is unavailable. */
-    private fun restartCarPlay(reason: String, connectionLost: Boolean = false) {
+    private fun restartCarPlay(reason: String) = restartCarPlay(reason, connectionLost = false)
+
+    /** [connectionLost] is true only for a restart that follows a lost connection, not a planned one. */
+    private fun restartCarPlay(reason: String, connectionLost: Boolean) {
         if (!CarPlayBackgroundSession.isOwner(this)) return
         if (shuttingDown.get() || menuOpen || handshakeResetInProgress) return
         val size = activeDisplaySize ?: return
