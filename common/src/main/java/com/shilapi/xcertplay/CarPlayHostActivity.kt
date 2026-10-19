@@ -5596,9 +5596,14 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun refreshConfiguration(
-        newConfig: Configuration = resources.configuration,
+        activityConfig: Configuration = resources.configuration,
         source: ThemeModeDiagnostics.Source,
     ) {
+        // The activity's own uiMode can stay on the old day/night value while the car has switched; the
+        // application context follows the system, so its night bits win.
+        val newConfig = Configuration(activityConfig).apply {
+            uiMode = withLiveNightMode(uiMode, applicationContext.resources.configuration.uiMode)
+        }
         if (lastConfiguration == newConfig) {
             logThemeState(source, newConfig)
             return
