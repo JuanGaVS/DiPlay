@@ -78,6 +78,7 @@ import com.shilapi.xcertplay.network.CarHotspotConfigWrite
 import com.shilapi.xcertplay.network.CarHotspotSettings
 import com.shilapi.xcertplay.network.CarHotspotTethering
 import com.shilapi.xcertplay.network.HotspotCredentials
+import com.shilapi.xcertplay.network.P2pBandFallback
 import com.shilapi.xcertplay.network.WifiP2pChannels
 import com.shilapi.xcertplay.orchestration.ManualHotspotProvisioning
 import com.shilapi.xcertplay.orchestration.ManualHotspotSecurity
@@ -3582,7 +3583,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun wifiDirectChannelControl(parent: LinearLayout) {
         val summary: (Int) -> String = {
-            getString(R.string.wifi_direct_channel_summary, wifiDirectChannelLabel(it))
+            // Auto that currently uses 2.4 GHz because 5 GHz kept failing says so, so the driver can tell.
+            val label = if (it == WifiP2pChannels.AUTO && P2pBandFallback.of(this).forced) {
+                getString(R.string.settings_wifi_direct_auto_fallback)
+            } else wifiDirectChannelLabel(it)
+            getString(R.string.wifi_direct_channel_summary, label)
         }
         val control = button(summary(AirPlayPersistence.loadWifiP2pPreferredChannel(this)), false) {}
         control.setOnClickListener {
