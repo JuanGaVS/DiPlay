@@ -2452,11 +2452,13 @@ class CarPlayController(
             if (state == false) debugLog("car hotspot: Android reports it off; connecting anyway, as the driver chose")
             pastOffReport = state == false
         }
+        var bandFallbackForced = false
         val manager: WirelessHotspotManager = when (hotspotMode) {
             WirelessHotspotMode.WIFI_P2P -> {
                 val channel = bandFallback.channelFor(config.wifiP2pPreferredChannel,
                     P2pBandFallback.currentNetworkKey(appContext))
-                if (channel != config.wifiP2pPreferredChannel) {
+                bandFallbackForced = channel != config.wifiP2pPreferredChannel
+                if (bandFallbackForced) {
                     debugLog("Wi-Fi P2P band fallback active: Auto uses 2.4 GHz after repeated 5 GHz first-connection timeouts (for up to 7 days)")
                 }
                 WifiP2pGroupManager(appContext, ::debugLog, preferredChannel = channel)
@@ -2504,6 +2506,12 @@ class CarPlayController(
             if (hotspot === manager) hotspot = null
             closeBestEffort(hotspotMode.name) { manager.close() }
             if (isStaleWirelessRun(generation)) throw failure
+            if (bandFallbackForced) {
+                // The group manager treats the forced band as the driver's own choice and does not fall back from
+                // it, so a group that cannot be created on 2.4 GHz must not keep the fallback on.
+                bandFallback.reset()
+                debugLog("Wi-Fi P2P band fallback released: the group could not be created on 2.4 GHz")
+            }
             if (pastOffReport && (failure as? WirelessStartupException)?.reason == WirelessStartupFailure.HOTSPOT_NOT_READY &&
                 com.shilapi.xcertplay.network.CarHotspotSettings.hotspotNeverCameUp(
                     appContext, com.shilapi.xcertplay.network.CarHotspotStatus.isEnabled(appContext))) {
