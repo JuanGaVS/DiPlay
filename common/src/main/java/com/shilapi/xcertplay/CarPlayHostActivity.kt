@@ -5980,17 +5980,20 @@ class CarPlayHostActivity : ComponentActivity() {
                     appendLog("Not reconnecting after $reason: the same attempt is running again")
                     return@postDelayed
                 }
-                restartCarPlay("Reconnecting after $reason", connectionLost = true)
+                restartCarPlay("Reconnecting after $reason", pauseAfterShortSession = true)
             },
             delayMillis,
         )
     }
 
     /** Full-stack fallback when an AirPlay-only reconnect is unavailable. */
-    private fun restartCarPlay(reason: String) = restartCarPlay(reason, connectionLost = false)
+    private fun restartCarPlay(reason: String) = restartCarPlay(reason, pauseAfterShortSession = false)
 
-    /** [connectionLost] is true only for a restart that follows a lost connection, not a planned one. */
-    private fun restartCarPlay(reason: String, connectionLost: Boolean) {
+    /**
+     * [pauseAfterShortSession] is true for a restart that rebuilds the Wi-Fi Direct group right after a
+     * short session: a lost connection or saved settings. Display, rotation and cluster-map restarts keep it false.
+     */
+    private fun restartCarPlay(reason: String, pauseAfterShortSession: Boolean) {
         if (!CarPlayBackgroundSession.isOwner(this)) return
         if (shuttingDown.get() || menuOpen || handshakeResetInProgress) return
         val size = activeDisplaySize ?: return
@@ -6003,11 +6006,10 @@ class CarPlayHostActivity : ComponentActivity() {
         Log.i(TAG, "$reason; rebuilding stack at ${size.width}x${size.height}")
         val sessionAgeMillis = sessionActiveSinceMillis?.let { SystemClock.elapsedRealtime() - it }
         sessionActiveSinceMillis = null
-        // The pause is for the Wi-Fi Direct hand-over after a lost connection. A wired restart (0.2.20
-        // made it start within seconds) and a planned one (settings, rotation, display, cluster map)
-        // must not wait.
+        // The pause is for the Wi-Fi Direct hand-over after a lost connection or Save and reconnect. A wired
+        // restart (0.2.20 made it start within seconds), rotation, display and cluster-map restarts must not wait.
         val cooldownMillis = RestartCooldown.delayMillis(
-            sessionAgeMillis, connectionLost, wirelessEnabled && wirelessHotspotMode == WirelessHotspotMode.WIFI_P2P,
+            sessionAgeMillis, pauseAfterShortSession, wirelessEnabled && wirelessHotspotMode == WirelessHotspotMode.WIFI_P2P,
         )
         val generation = ++restartGeneration
         handshakeResetInProgress = true
@@ -6224,7 +6226,7 @@ class CarPlayHostActivity : ComponentActivity() {
         } else if ((reconnect || recoveryPending) && controller != null) {
             restartCarPlay(
                 if (reconnect) "Settings saved; reconnecting" else "Connection lost while settings were open; reconnecting",
-                connectionLost = !reconnect,
+                pauseAfterShortSession = true,
             )
         } else {
             maybeStartCarPlay()

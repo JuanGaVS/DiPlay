@@ -31,7 +31,7 @@ class RestartCooldownTest {
     }
 
     @Test
-    fun pausesOnlyWhenAWifiDirectConnectionWasLost() {
+    fun pausesOnlyWhenTheRestartMayPauseOnWifiDirect() {
         assertEquals(RestartCooldown.COOLDOWN_MILLIS, RestartCooldown.delayMillis(30_000L, true, true))
         assertEquals(0L, RestartCooldown.delayMillis(30_000L, false, true))
         assertEquals(0L, RestartCooldown.delayMillis(30_000L, true, false))
