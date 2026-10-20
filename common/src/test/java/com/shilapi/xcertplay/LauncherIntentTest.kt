@@ -87,4 +87,36 @@ class LauncherIntentTest {
         assertNull(shadowOf(activity).nextStartedActivity)
         assertEquals(0, stops)
     }
+
+    @Test fun automaticRelaunchWhileCarPlayRunsReturnsToProjectionInsteadOfCoveringIt() {
+        controller = Robolectric.buildActivity(DiPlayActivity::class.java,
+            Intent().putExtra("page", "settings")).create()
+        val activity = controller!!.get()
+        val wake = Intent().putExtra(PhoneBluetoothReceiver.EXTRA_AUTO_CONNECT, true)
+        val boot = Intent().putExtra(BootReceiver.EXTRA_AUTO_START, true)
+        assertTrue(DiPlayActivity.isAutomaticLaunch(wake))
+        assertTrue(DiPlayActivity.isAutomaticLaunch(boot))
+        assertFalse(DiPlayActivity.isAutomaticLaunch(Intent(boot).putExtra("page", "settings")))
+        assertFalse(DiPlayActivity.isAutomaticLaunch(Intent()))
+        for (automatic in listOf(wake, boot)) {
+            ReflectionHelpers.callInstanceMethod<Unit>(activity, "onNewIntent",
+                ReflectionHelpers.ClassParameter(Intent::class.java, automatic))
+            assertEquals(CarPlayHostActivity::class.java.name,
+                shadowOf(activity).nextStartedActivity?.component?.className)
+        }
+        assertEquals(0, stops)
+    }
+
+    @Test fun automaticLaunchOfAFreshActivityWhileCarPlayRunsReturnsToProjection() {
+        for (extra in listOf(PhoneBluetoothReceiver.EXTRA_AUTO_CONNECT, BootReceiver.EXTRA_AUTO_START)) {
+            controller = Robolectric.buildActivity(DiPlayActivity::class.java, Intent().putExtra(extra, true)).create()
+            val activity = controller!!.get()
+            assertTrue(activity.isFinishing)
+            assertEquals(CarPlayHostActivity::class.java.name,
+                shadowOf(activity).nextStartedActivity?.component?.className)
+            assertEquals(0, stops)
+            controller!!.destroy()
+            controller = null
+        }
+    }
 }

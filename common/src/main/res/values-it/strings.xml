@@ -16,6 +16,7 @@
     <string name="wifi_direct_channel_choice">Canale %1$d · %2$s</string>
     <string name="wifi_direct_channel_description">Automatico sceglie un canale per te. I canali manuali dipendono da ciò che supporta la tua auto. Le modifiche si applicano alla prossima connessione Wi-Fi Direct.</string>
     <string name="settings_wifi_direct_auto_band">Automatico · %1$s</string>
+    <string name="settings_wifi_direct_auto_fallback">Automatico (2,4 GHz dopo errori)</string>
     <string name="settings_wifi_direct_band_note">Automatico · 5 GHz e Automatico · 2,4 GHz mantengono Wi-Fi Direct su quella banda e lasciano scegliere il canale all’auto. Se l’auto non può usare quella banda, la connessione si interrompe con un messaggio invece di cambiare banda.</string>
     <string name="hotspot_hint_manual">Hotspot integrato dell’auto · Tieni attivi l’hotspot dell’auto, il Bluetooth e il Wi-Fi dell’iPhone.</string>
     <string name="hotspot_hint_local">Apri Configurazione connessione per salvare i dati dell’hotspot integrato dell’auto.</string>

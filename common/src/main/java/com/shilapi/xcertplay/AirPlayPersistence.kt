@@ -17,6 +17,7 @@ import com.shilapi.xcertplay.orchestration.ManualHotspotBand
 import com.shilapi.xcertplay.orchestration.ManualHotspotSecurity
 import com.shilapi.xcertplay.orchestration.MfiTarget
 import com.shilapi.xcertplay.orchestration.WirelessHotspotMode
+import com.shilapi.xcertplay.network.P2pBandFallback
 import com.shilapi.xcertplay.network.WifiP2pChannels
 import com.shilapi.xcertplay.transport.LockdownPairRecord
 import java.io.File
@@ -399,6 +400,8 @@ object AirPlayPersistence {
         require(WifiP2pChannels.isValid(channel))
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putInt(KEY_WIFI_P2P_PREFERRED_CHANNEL, channel).apply()
+        // A channel the driver just chose starts over: forget any 5 GHz timeouts counted for Auto.
+        P2pBandFallback.of(context).reset()
     }
 
     /** Wi-Fi Direct: pause the car's own Wi-Fi search while CarPlay runs (on by default, needs ADB). */

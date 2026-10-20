@@ -78,6 +78,7 @@ import com.shilapi.xcertplay.network.CarHotspotConfigWrite
 import com.shilapi.xcertplay.network.CarHotspotSettings
 import com.shilapi.xcertplay.network.CarHotspotTethering
 import com.shilapi.xcertplay.network.HotspotCredentials
+import com.shilapi.xcertplay.network.P2pBandFallback
 import com.shilapi.xcertplay.network.WifiP2pChannels
 import com.shilapi.xcertplay.orchestration.ManualHotspotProvisioning
 import com.shilapi.xcertplay.orchestration.ManualHotspotSecurity
@@ -373,7 +374,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Back on the home page finishes this activity while the session runs on, so the icon lands here.
-        if (savedInstanceState == null && isLauncherIntent(intent) && CarPlayBackgroundSession.hasSession()) {
+        // A boot or Bluetooth wake that starts this activity cold, while CarPlay already runs, does the same.
+        if (savedInstanceState == null && (isLauncherIntent(intent) || isAutomaticLaunch(intent)) &&
+            CarPlayBackgroundSession.hasSession()) {
+            intent.removeExtra(PhoneBluetoothReceiver.EXTRA_AUTO_CONNECT)
+            intent.removeExtra(BootReceiver.EXTRA_AUTO_START)
             openProjection(); finish(); return
         }
         scheduleBackgroundUpdateChecks()
@@ -430,7 +435,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         connectionSettingsReturnCategory = null
         // CarPlay runs in its own task, so the launcher icon resumes this one. Settings opened from
         // CarPlay carry a "page" extra, which isLauncherIntent rejects.
-        if (isLauncherIntent(intent) && CarPlayBackgroundSession.hasSession()) {
+        // The car's boot and the iPhone's Bluetooth wake relaunch this activity with NEW_TASK while CarPlay is
+        // already starting. Without this, Home would stay on top of the projection until the driver left it.
+        if ((isLauncherIntent(intent) || isAutomaticLaunch(intent)) && CarPlayBackgroundSession.hasSession()) {
+            intent.removeExtra(PhoneBluetoothReceiver.EXTRA_AUTO_CONNECT)
+            intent.removeExtra(BootReceiver.EXTRA_AUTO_START)
             page = "home"; render(); openProjection(); return
         }
         page = intent.getStringExtra("page") ?: "home"; render()
@@ -3574,7 +3583,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun wifiDirectChannelControl(parent: LinearLayout) {
         val summary: (Int) -> String = {
-            getString(R.string.wifi_direct_channel_summary, wifiDirectChannelLabel(it))
+            // Auto that currently uses 2.4 GHz because 5 GHz kept failing says so, so the driver can tell.
+            val label = if (it == WifiP2pChannels.AUTO && P2pBandFallback.of(this).forced) {
+                getString(R.string.settings_wifi_direct_auto_fallback)
+            } else wifiDirectChannelLabel(it)
+            getString(R.string.wifi_direct_channel_summary, label)
         }
         val control = button(summary(AirPlayPersistence.loadWifiP2pPreferredChannel(this)), false) {}
         control.setOnClickListener {
@@ -6742,6 +6755,12 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             return language == "zh" && text.isNotBlank() &&
                 text.none { it in 'A'..'Z' || it in 'a'..'z' }
         }
+
+        /** Relaunch by the boot receiver or the iPhone's Bluetooth wake, not by the driver. */
+        internal fun isAutomaticLaunch(intent: Intent): Boolean =
+            !intent.hasExtra("page") &&
+                (intent.getBooleanExtra(PhoneBluetoothReceiver.EXTRA_AUTO_CONNECT, false) ||
+                    intent.getBooleanExtra(BootReceiver.EXTRA_AUTO_START, false))
 
         internal fun isLauncherIntent(intent: Intent): Boolean =
             intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_LAUNCHER) &&

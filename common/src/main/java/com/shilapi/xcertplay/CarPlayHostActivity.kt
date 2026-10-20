@@ -97,6 +97,7 @@ import com.shilapi.xcertplay.media.CarPlayTouchMapper
 import com.shilapi.xcertplay.media.CarPlayVideoLayout
 import com.shilapi.xcertplay.network.CarPlayVpnService
 import com.shilapi.xcertplay.orchestration.CarPlayController
+import com.shilapi.xcertplay.orchestration.RestartCooldown
 import com.shilapi.xcertplay.orchestration.CarPlayRuntimeConfig
 import com.shilapi.xcertplay.network.WirelessStartupFailure
 import com.shilapi.xcertplay.network.WirelessStartupPolicy
@@ -604,6 +605,10 @@ class CarPlayHostActivity : ComponentActivity() {
     private var handshakeResetInProgress = false
     private var startAfterHandshakeReset = false
     private var restartGeneration = 0
+    /** Elapsed-realtime when the current AirPlay session became active; null while none is. */
+    private var sessionActiveSinceMillis: Long? = null
+    /** The rebuild that waits out the Wi-Fi Direct pause after a short session; null when none waits. */
+    private var pendingRestartStart: Runnable? = null
     private var reconnectScheduled = false
     // How often the current controller reached its control loop, and whether a loss came after the
     // last time. A retry scheduled before the count went up leaves the attempt alone only while it is
@@ -819,6 +824,7 @@ class CarPlayHostActivity : ComponentActivity() {
         getSystemService(android.hardware.display.DisplayManager::class.java)
             ?.registerDisplayListener(clusterDisplayListener, mainHandler)
         initializeSessionLog()
+        registerConnectionEventLog()
         lastConfiguration = Configuration(resources.configuration)
         darkMode = savedInstanceState?.getBoolean("carplay_night_active")
             ?: nightModeOrNull(resources.configuration.uiMode) ?: false
@@ -1101,6 +1107,7 @@ class CarPlayHostActivity : ComponentActivity() {
                 AirPlayPersistence.saveWirelessEnabled(this, false)
                 wirelessEnabled = false
                 wirelessPermissionsReady = true
+                skipRestartPause()
                 if (controller != null) {
                     restartCarPlay("switching to USB")
                 }
@@ -1844,7 +1851,9 @@ class CarPlayHostActivity : ComponentActivity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        refreshConfiguration(newConfig, ThemeModeDiagnostics.Source.CALLBACK)
+        // The callback can carry the activity's stale day/night bits (a window resize delivers it too), which
+        // would put CarPlay back to the old mode; the application context has the current ones.
+        refreshConfiguration(withLiveNight(newConfig), ThemeModeDiagnostics.Source.CALLBACK)
         applyFullscreenMode()
         stageStatusView?.maxWidth = (resources.displayMetrics.widthPixels * 0.78f).toInt()
         connectionHelpView?.maxWidth = (resources.displayMetrics.widthPixels * 0.78f).toInt()
@@ -1866,6 +1875,7 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        pendingRestartStart?.let { mainHandler.removeCallbacks(it) }; pendingRestartStart = null
         mainHandler.removeCallbacks(hideTemporarySystemBars)
         discardLastPicture()
         if (pictureCopyThreadStarted) pictureCopyThread.quitSafely()
@@ -1910,6 +1920,7 @@ class CarPlayHostActivity : ComponentActivity() {
         fallbackVideoView = null
         fallbackVideoBounds = null
         sessionLog?.append("Activity destroyed")
+        unregisterConnectionEventLog()
         sessionLog?.close()
         sessionLog = null
         super.onDestroy()
@@ -1987,7 +1998,12 @@ class CarPlayHostActivity : ComponentActivity() {
             visibility = View.GONE
             setOnClickListener {
                 if (!CarPlayBackgroundSession.isOwner(this@CarPlayHostActivity) ||
-                    shuttingDown.get() || menuOpen || handshakeResetInProgress) return@setOnClickListener
+                    shuttingDown.get() || menuOpen) return@setOnClickListener
+                if (handshakeResetInProgress) {
+                    // Only a waiting pause may be cut short; a teardown in progress still blocks Retry.
+                    if (pendingRestartStart != null) { visibility = View.GONE; skipRestartPause() }
+                    return@setOnClickListener
+                }
                 startupRetryBudget.manualRetry()
                 startupRetryStopped = false
                 reconnectAttempts = 0
@@ -5254,6 +5270,7 @@ class CarPlayHostActivity : ComponentActivity() {
                     if (pending?.first === session) {
                         installIphoneCornerMask(session, pending.second.first, pending.second.second)
                     } else clearIphoneCornerMask()
+                    sessionActiveSinceMillis = SystemClock.elapsedRealtime()
                     CarPlayBackgroundSession.active = true
                     showConnectionHelp(null)
                     callPopupSessionReady = true
@@ -5595,8 +5612,18 @@ class CarPlayHostActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * The activity's configuration with the application context's day/night bits. The activity's own uiMode
+     * can stay on the old value while the car has switched; the application context follows the system.
+     */
+    private fun liveConfiguration() = withLiveNight(resources.configuration)
+
+    private fun withLiveNight(configuration: Configuration) = Configuration(configuration).apply {
+        uiMode = withLiveNightMode(uiMode, applicationContext.resources.configuration.uiMode)
+    }
+
     private fun refreshConfiguration(
-        newConfig: Configuration = resources.configuration,
+        newConfig: Configuration = liveConfiguration(),
         source: ThemeModeDiagnostics.Source,
     ) {
         if (lastConfiguration == newConfig) {
@@ -5617,7 +5644,22 @@ class CarPlayHostActivity : ComponentActivity() {
     private fun logThemeState(source: ThemeModeDiagnostics.Source, configuration: Configuration) {
         themeDiagnostics.observe(
             source, configuration.uiMode, darkMode, activeAirPlaySession != null, SystemClock.elapsedRealtime(),
+            themeSources(),
         )?.let(::appendLog)
+    }
+
+    /**
+     * The same day/night setting as seen through the framework's own resources, the application context and
+     * UiModeManager. Only recorded: a head unit may update one of them while this activity's stays stale.
+     */
+    private fun themeSources(): String = try {
+        val system = Resources.getSystem().configuration.uiMode
+        val application = applicationContext.resources.configuration.uiMode
+        val manager = (getSystemService(Context.UI_MODE_SERVICE) as? android.app.UiModeManager)?.nightMode
+        "systemUiMode=0x${system.toString(16)} applicationUiMode=0x${application.toString(16)} " +
+            "uiModeManagerNight=${manager ?: "unavailable"}"
+    } catch (error: RuntimeException) {
+        "themeSources=unavailable failureClass=${error.javaClass.simpleName}"
     }
 
     private fun syncAirPlayDarkMode(source: ThemeModeDiagnostics.Source) {
@@ -5967,14 +6009,20 @@ class CarPlayHostActivity : ComponentActivity() {
                     appendLog("Not reconnecting after $reason: the same attempt is running again")
                     return@postDelayed
                 }
-                restartCarPlay("Reconnecting after $reason")
+                restartCarPlay("Reconnecting after $reason", pauseAfterShortSession = true)
             },
             delayMillis,
         )
     }
 
     /** Full-stack fallback when an AirPlay-only reconnect is unavailable. */
-    private fun restartCarPlay(reason: String) {
+    private fun restartCarPlay(reason: String) = restartCarPlay(reason, pauseAfterShortSession = false)
+
+    /**
+     * [pauseAfterShortSession] is true for a restart that rebuilds the Wi-Fi Direct group right after a
+     * short session: a lost connection or saved settings. Display, rotation and cluster-map restarts keep it false.
+     */
+    private fun restartCarPlay(reason: String, pauseAfterShortSession: Boolean) {
         if (!CarPlayBackgroundSession.isOwner(this)) return
         if (shuttingDown.get() || menuOpen || handshakeResetInProgress) return
         val size = activeDisplaySize ?: return
@@ -5985,6 +6033,13 @@ class CarPlayHostActivity : ComponentActivity() {
         ClusterActivityOutput.setStreamActive(false)
         setConnectionStage(reason)
         Log.i(TAG, "$reason; rebuilding stack at ${size.width}x${size.height}")
+        val sessionAgeMillis = sessionActiveSinceMillis?.let { SystemClock.elapsedRealtime() - it }
+        sessionActiveSinceMillis = null
+        // The pause is for the Wi-Fi Direct hand-over after a lost connection or Save and reconnect. A wired
+        // restart (0.2.20 made it start within seconds), rotation, display and cluster-map restarts must not wait.
+        val cooldownMillis = RestartCooldown.delayMillis(
+            sessionAgeMillis, pauseAfterShortSession, wirelessEnabled && wirelessHotspotMode == WirelessHotspotMode.WIFI_P2P,
+        )
         val generation = ++restartGeneration
         handshakeResetInProgress = true
         callPopupSessionReady = false
@@ -6008,18 +6063,40 @@ class CarPlayHostActivity : ComponentActivity() {
                 diagnosticLog,
                 "${CarPlayController.CONNECTION_DIAGNOSTIC_PREFIX} generation=$generation " +
                     "restart teardownWaitCompleted=$completed " +
-                    "elapsedMs=${((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(0)}",
+                    "elapsedMs=${((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(0)} " +
+                    "sessionAgeMs=${sessionAgeMillis ?: "none"} cooldownMs=$cooldownMillis",
             )
             oldSink?.let(::closeRetiringSink)
             runOnUiThread {
                 if (!shuttingDown.get() && generation == restartGeneration) {
-                    handshakeResetInProgress = false
-                    // The display can rotate again while the old stack is closing. Use the
-                    // latest accepted size, and wait for any pending resize to settle first.
-                    maybeStartCarPlay()
+                    val startAgain = {
+                        pendingRestartStart = null
+                        if (!shuttingDown.get() && generation == restartGeneration) {
+                            handshakeResetInProgress = false
+                            // The display can rotate again while the old stack is closing. Use the
+                            // latest accepted size, and wait for any pending resize to settle first.
+                            maybeStartCarPlay()
+                        }
+                    }
+                    if (cooldownMillis > 0L) {
+                        // handshakeResetInProgress stays set, so nothing else restarts meanwhile.
+                        appendLog("Short session; waiting ${cooldownMillis / 1000} s before reconnecting")
+                        val pending = Runnable { startAgain() }
+                        pendingRestartStart = pending
+                        mainHandler.postDelayed(pending, cooldownMillis)
+                    } else {
+                        startAgain()
+                    }
                 }
             }
         }
+    }
+
+    /** Ends the pause before a rebuild at once, for a driver action such as Retry or switching to USB. */
+    private fun skipRestartPause() {
+        val pending = pendingRestartStart ?: return
+        mainHandler.removeCallbacks(pending)
+        pending.run()
     }
 
     private fun showDiPlayHome(page: String = "home") {
@@ -6176,7 +6253,10 @@ class CarPlayHostActivity : ComponentActivity() {
         } else if (handshakeResetInProgress) {
             startAfterHandshakeReset = true
         } else if ((reconnect || recoveryPending) && controller != null) {
-            restartCarPlay(if (reconnect) "Settings saved; reconnecting" else "Connection lost while settings were open; reconnecting")
+            restartCarPlay(
+                if (reconnect) "Settings saved; reconnecting" else "Connection lost while settings were open; reconnecting",
+                pauseAfterShortSession = true,
+            )
         } else {
             maybeStartCarPlay()
         }
@@ -6208,6 +6288,8 @@ class CarPlayHostActivity : ComponentActivity() {
         sessionDisplay = null
         discardLastPicture()
         Log.i(TAG, "shutdown reason=$reason terminateProcess=$terminateProcess")
+        val shutdownStartedMillis = SystemClock.elapsedRealtime()
+        appendLog("CONNECTION_EVENT shutdown requested reason=$reason terminateProcess=$terminateProcess")
         teardownExecutor.execute {
             oldController?.close()
             val clean = oldController?.awaitClosed(CONTROLLER_CLOSE_TIMEOUT_MILLIS) ?: true
@@ -6217,6 +6299,8 @@ class CarPlayHostActivity : ComponentActivity() {
                 applicationContext.stopService(Intent(applicationContext, CarPlayVpnService::class.java))
             }
             Log.i(TAG, "shutdown complete clean=$clean")
+            sessionLog?.append(formattedLogLine("CONNECTION_EVENT shutdown complete clean=$clean " +
+                "elapsedMs=${SystemClock.elapsedRealtime() - shutdownStartedMillis}", System.currentTimeMillis()))
             applicationContext.stopService(Intent(applicationContext, DiPlaySessionService::class.java))
             teardownExecutor.shutdown()
             mainHandler.post { completion() }
@@ -6585,6 +6669,30 @@ class CarPlayHostActivity : ComponentActivity() {
     private fun appendLog(message: String) {
         val safe = DiagnosticRedactor.redact(message) ?: return
         sessionLog?.append(formattedLogLine(safe, System.currentTimeMillis()))
+    }
+
+    private var connectionEventLog: ConnectionEventDiagnostics? = null
+
+    /** Records Bluetooth, Wi-Fi Direct, screen and power events, to show what the head unit saw at a disconnect. */
+    private fun registerConnectionEventLog() {
+        if (connectionEventLog != null) return
+        val receiver = ConnectionEventDiagnostics(::appendLog)
+        try {
+            // Only system broadcasts are recorded, so the receiver does not need to be exported.
+            androidx.core.content.ContextCompat.registerReceiver(
+                this, receiver, ConnectionEventDiagnostics.filter(),
+                androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+            connectionEventLog = receiver
+        } catch (error: RuntimeException) {
+            Log.w(TAG, "Could not record connection events", error)
+        }
+    }
+
+    private fun unregisterConnectionEventLog() {
+        val receiver = connectionEventLog ?: return
+        connectionEventLog = null
+        try { unregisterReceiver(receiver) } catch (_: IllegalArgumentException) {}
     }
 
     private fun appendFileLog(message: String) {
