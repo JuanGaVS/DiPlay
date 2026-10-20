@@ -1851,7 +1851,9 @@ class CarPlayHostActivity : ComponentActivity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        refreshConfiguration(newConfig, ThemeModeDiagnostics.Source.CALLBACK)
+        // The callback can carry the activity's stale day/night bits (a window resize delivers it too), which
+        // would put CarPlay back to the old mode; the application context has the current ones.
+        refreshConfiguration(withLiveNight(newConfig), ThemeModeDiagnostics.Source.CALLBACK)
         applyFullscreenMode()
         stageStatusView?.maxWidth = (resources.displayMetrics.widthPixels * 0.78f).toInt()
         connectionHelpView?.maxWidth = (resources.displayMetrics.widthPixels * 0.78f).toInt()
@@ -5614,7 +5616,9 @@ class CarPlayHostActivity : ComponentActivity() {
      * The activity's configuration with the application context's day/night bits. The activity's own uiMode
      * can stay on the old value while the car has switched; the application context follows the system.
      */
-    private fun liveConfiguration() = Configuration(resources.configuration).apply {
+    private fun liveConfiguration() = withLiveNight(resources.configuration)
+
+    private fun withLiveNight(configuration: Configuration) = Configuration(configuration).apply {
         uiMode = withLiveNightMode(uiMode, applicationContext.resources.configuration.uiMode)
     }
 
