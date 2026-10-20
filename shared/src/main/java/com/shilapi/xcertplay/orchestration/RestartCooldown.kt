@@ -24,7 +24,10 @@ object RestartCooldown {
         else -> COOLDOWN_MILLIS
     }
 
-    /** The pause applies only when a Wi-Fi Direct connection was lost, never to planned restarts or wired ones. */
-    fun delayMillis(sessionAgeMillis: Long?, connectionLost: Boolean, wifiDirect: Boolean): Long =
-        if (connectionLost && wifiDirect) delayMillis(sessionAgeMillis) else 0L
+    /**
+     * The pause applies only to a restart that rebuilds the Wi-Fi Direct group after a lost connection or saved
+     * settings ([pauseApplies]), never to display, rotation or cluster-map restarts or to wired ones.
+     */
+    fun delayMillis(sessionAgeMillis: Long?, pauseApplies: Boolean, wifiDirect: Boolean): Long =
+        if (pauseApplies && wifiDirect) delayMillis(sessionAgeMillis) else 0L
 }
