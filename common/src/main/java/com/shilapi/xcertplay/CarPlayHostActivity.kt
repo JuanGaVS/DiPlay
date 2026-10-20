@@ -6678,7 +6678,11 @@ class CarPlayHostActivity : ComponentActivity() {
         if (connectionEventLog != null) return
         val receiver = ConnectionEventDiagnostics(::appendLog)
         try {
-            registerReceiver(receiver, ConnectionEventDiagnostics.filter())
+            // Only system broadcasts are recorded, so the receiver does not need to be exported.
+            androidx.core.content.ContextCompat.registerReceiver(
+                this, receiver, ConnectionEventDiagnostics.filter(),
+                androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
             connectionEventLog = receiver
         } catch (error: RuntimeException) {
             Log.w(TAG, "Could not record connection events", error)
