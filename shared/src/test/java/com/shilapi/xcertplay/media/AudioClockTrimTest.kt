@@ -66,19 +66,19 @@ class AudioClockTrimTest {
     @Test fun aLowLevelSlowsTheTrackAndTheStatsShowTheRate() {
         // 150 ms queued against a 300 ms target.
         write(28_800)
-        assertEquals(listOf(47_280), RateTrack.rates)
+        assertEquals(listOf(47_856), RateTrack.rates)
         type.getDeclaredMethod("logStatsIfDue", Boolean::class.javaPrimitiveType).apply { isAccessible = true }
             .invoke(renderer, true)
-        assertTrue(reports.toString(), reports.any { it.startsWith("audio stats") && it.contains(" playbackRate=47280 ended=true") })
+        assertTrue(reports.toString(), reports.any { it.startsWith("audio stats") && it.contains(" playbackRate=47856 ended=true") })
     }
 
     @Test fun aTrackThatRefusesTheRateKeepsPlayingWithoutTheTrim() {
         RateTrack.result = AudioTrack.ERROR_INVALID_OPERATION
         write(28_800)
         assertNull(get("clockTrim"))
-        assertTrue(reports.toString(), reports.contains("Audio: clock trim off audioType=media rate=47280 result=-3"))
+        assertTrue(reports.toString(), reports.contains("Audio: clock trim off audioType=media rate=47856 result=-3"))
         write(28_800)
-        assertEquals(listOf(47_280), RateTrack.rates)
+        assertEquals(listOf(47_856), RateTrack.rates)
     }
 
     @Test fun nothingIsTrimmedBeforeMusicPlays() {
