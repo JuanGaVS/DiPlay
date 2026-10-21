@@ -151,20 +151,19 @@ class MediaClockTrimTest {
 
     @Test fun aBurstyQueueDoesNotMakeThePitchWarble() {
         // The queue level of a real log bounced between empty and 3x the target every few seconds (#826).
+        // Wherever the level goes, the pitch may only glide; the settled range is covered by the BurstDrive tests.
         val trim = MediaClockTrim(48_000, 24_000)
         val random = Random(5)
         val rates = mutableListOf<Int>()
         var nowNs = 0L
-        repeat(600) { second ->
+        repeat(600) { _ ->
             repeat(2) {
                 nowNs += 500_000_000L
                 trim.sample((random.nextDouble() * 3 * 24_000).toLong(), nowNs)
                 trim.rateDue(nowNs)?.let { rates += it }
             }
-            if (second >= 60) rates += trim.rate
+            rates += trim.rate
         }
-        val settled = rates.takeLast(500)
-        assertTrue("range ${settled.min()}..${settled.max()}", settled.max() - settled.min() <= 480)
         // However the level moves, the pitch never glides faster than about a cent a second.
         val steps = rates.zipWithNext { a, b -> kotlin.math.abs(b - a) }
         assertTrue("steepest ${steps.max()}", steps.max() <= MediaClockTrim.MAX_SLEW_HZ)

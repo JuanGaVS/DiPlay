@@ -12,7 +12,7 @@ import kotlin.math.roundToInt
  * each write the renderer reports how many frames are queued; a slow average of that level over time, as the
  * track drains it between writes, drives a PI controller that, once a second, trims the track's playback rate
  * so the level stays at the start threshold.
- * The trim is bounded by [MAX_TRIM] (26 cents at most) and settles at the head unit's own drift, which is a
+ * The trim is bounded by [MAX_TRIM] (21 cents at most), glides at most [MAX_SLEW_HZ] Hz a second so the pitch cannot warble (#826), and settles at the head unit's own drift, which is a
  * hardware constant, so the next music stream starts from the trim this one learned.
  */
 internal class MediaClockTrim(
@@ -95,9 +95,7 @@ internal class MediaClockTrim(
         const val KP = 0.02
         const val MAX_PROPORTIONAL = 0.003
         /** Per second, per unit of level error. */
-        const val KI = 0.002
-        /** Queue levels beyond this many targets away say nothing more about the clocks. */
-        const val ERROR_LIMIT = 1.0
+        const val KI = 0.001
         const val MIN_STEP_HZ = 4
         const val AVERAGE_NS = 5_000_000_000.0
         /** The pitch glides at most 0.05 % (about 1 cent) per second, so a swing of the level is not heard as a warble. */
