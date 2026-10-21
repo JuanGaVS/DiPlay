@@ -138,7 +138,7 @@ class MediaClockTrimTest {
         assertEquals(48_000.0, drive.trim.rate.toDouble(), 5.0)
     }
 
-    @Test fun theTrimStaysWithinOnePointFivePercent() {
+    @Test fun theTrimStaysWithinOnePointTwoPercent() {
         val trim = MediaClockTrim(48_000, 14_400)
         // Nothing queued for minutes: the trim stops at its bound.
         for (second in 0..600) {
@@ -146,19 +146,40 @@ class MediaClockTrimTest {
             trim.sample(0, nowNs)
             trim.rateDue(nowNs)
         }
-        assertEquals(47_280, trim.rate)
+        assertEquals(47_424, trim.rate)
+    }
+
+    @Test fun aBurstyQueueDoesNotMakeThePitchWarble() {
+        // The queue level of a real log bounced between empty and 3x the target every few seconds (#826).
+        val trim = MediaClockTrim(48_000, 24_000)
+        val random = Random(5)
+        val rates = mutableListOf<Int>()
+        var nowNs = 0L
+        repeat(600) { second ->
+            repeat(2) {
+                nowNs += 500_000_000L
+                trim.sample((random.nextDouble() * 3 * 24_000).toLong(), nowNs)
+                trim.rateDue(nowNs)?.let { rates += it }
+            }
+            if (second >= 60) rates += trim.rate
+        }
+        val settled = rates.takeLast(500)
+        assertTrue("range ${settled.min()}..${settled.max()}", settled.max() - settled.min() <= 480)
+        // However the level moves, the pitch never glides faster than about a cent a second.
+        val steps = rates.zipWithNext { a, b -> kotlin.math.abs(b - a) }
+        assertTrue("steepest ${steps.max()}", steps.max() <= MediaClockTrim.MAX_SLEW_HZ)
     }
 
     @Test fun withoutNewAudioTheTrimHolds() {
         val trim = MediaClockTrim(48_000, 14_400)
         trim.sample(7_200, 0)
-        assertEquals(47_280, trim.rateDue(0))
+        assertEquals(47_856, trim.rateDue(0))
         // The iPhone paused: no write for 2 s, so no update even though the last level was low.
         assertNull(trim.rateDue(2_000_000_000L))
-        assertEquals(47_280, trim.rate)
+        assertEquals(47_856, trim.rate)
         // Music resumes at the target level: the average restarts there.
         trim.sample(14_400, 2_100_000_000L)
-        assertEquals(48_000, trim.rateDue(2_100_000_000L))
+        assertEquals(47_880, trim.rateDue(2_100_000_000L))
     }
 
     @Test fun aLongPauseDoesNotCountAsDrift() {
@@ -168,7 +189,7 @@ class MediaClockTrimTest {
         // Five minutes later music resumes with a short first burst: one step, not 300 s, is integrated.
         val resumeNs = 300_000_000_000L
         trim.sample(10_080, resumeNs)
-        assertEquals(47_539, trim.rateDue(resumeNs))
+        assertEquals(47_976, trim.rateDue(resumeNs))
         assertEquals(-0.0006, MediaClockTrim.learnedTrim, 1e-9)
     }
 
@@ -182,7 +203,7 @@ class MediaClockTrimTest {
     @Test fun updatesComeAtMostOnceASecond() {
         val trim = MediaClockTrim(48_000, 14_400)
         trim.sample(7_200, 0)
-        assertEquals(47_280, trim.rateDue(0))
+        assertEquals(47_856, trim.rateDue(0))
         trim.sample(14_400, 500_000_000L)
         assertNull(trim.rateDue(500_000_000L))
     }

@@ -1,5 +1,6 @@
 package com.shilapi.xcertplay.media
 
+import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.roundToInt
 
@@ -75,19 +76,32 @@ internal class MediaClockTrim(
             integral = (integral + KI * error * seconds).coerceIn(-MAX_TRIM, MAX_TRIM)
             learnedTrim = integral
         }
-        val next = (sampleRate * (1.0 + (KP * error + integral).coerceIn(-MAX_TRIM, MAX_TRIM))).roundToInt()
+        // The proportional part is small and bounded: it may only nudge, never swing the pitch (#826 wobble).
+        val proportional = (KP * error).coerceIn(-MAX_PROPORTIONAL, MAX_PROPORTIONAL)
+        var next = (sampleRate * (1.0 + (proportional + integral).coerceIn(-MAX_TRIM, MAX_TRIM))).roundToInt()
+        // The first update may jump to the trim learned by the last stream; after that the pitch only glides.
+        if (previousUpdate != null) next = next.coerceIn(rate - MAX_SLEW_HZ, rate + MAX_SLEW_HZ)
         if (next == rate) return null
+        // Ignore changes of a few Hz: they are not audible but each one restarts the resampler.
+        if (abs(next - rate) < MIN_STEP_HZ) return null
         rate = next
         return next
     }
 
     internal companion object {
-        /** At most 1.5 % slower or faster: 26 cents, above the 0.76 % seen on #610. */
-        const val MAX_TRIM = 0.015
-        const val KP = 0.03
+        /** At most 1.2 % slower or faster, above the 0.76 % seen on #610. */
+        const val MAX_TRIM = 0.012
+        /** The fast part of the correction: at most 0.3 % (5 cents), barely audible. */
+        const val KP = 0.02
+        const val MAX_PROPORTIONAL = 0.003
         /** Per second, per unit of level error. */
-        const val KI = 0.001
+        const val KI = 0.002
+        /** Queue levels beyond this many targets away say nothing more about the clocks. */
+        const val ERROR_LIMIT = 1.0
+        const val MIN_STEP_HZ = 4
         const val AVERAGE_NS = 5_000_000_000.0
+        /** The pitch glides at most 0.05 % (about 1 cent) per second, so a swing of the level is not heard as a warble. */
+        const val MAX_SLEW_HZ = 24
         const val UPDATE_NS = 1_000_000_000L
         /** Longer than the 0.4 s between the iPhone's bursts over Wi-Fi: a longer silence is a pause or a stall. */
         const val STALE_NS = 1_000_000_000L
